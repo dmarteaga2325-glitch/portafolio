@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { Client } from "@notionhq/client";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -61,7 +60,7 @@ function getPageTitle(page: any) {
   return "Sin título";
 }
 
-async function startServer() {
+export async function createServer() {
   const app = express();
   const PORT = 3000;
 
@@ -182,12 +181,15 @@ async function startServer() {
 
   // --- Vite Middleware ---
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
+    // Only serve static files here if NOT on Vercel
+    // Vercel handles static files via vercel.json rewrites more efficiently
     const distPath = path.join(__dirname, "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
@@ -195,9 +197,15 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+// For AI Studio environment, start the server normally
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  createServer().then(app => {
+    const PORT = 3000;
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+    });
+  });
+}
